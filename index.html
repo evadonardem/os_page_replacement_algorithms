@@ -104,9 +104,10 @@
 		function Container() {
 			this.pages = null;
 			this.frames = null;
-			this.page_faults = 0;
+			this.fifo_page_faults = 0;
+			this.lru_page_faults = 0;
 
-			this.simulate = function() {
+			this.fifo = function() {
 				var pages = this.pages.split(';');
 				var frames = [];
 
@@ -149,7 +150,7 @@
 						if(frame[0]==null) {					
 							frames[j][0] = matrix[j][i][0] = page;
 							matrix[j][i][1] = true;
-							this.page_faults += 1; 
+							this.fifo_page_faults += 1; 
 							continue loop_pages;
 						}
 
@@ -157,7 +158,7 @@
 
 						// page fault occur
 						if(j==this.frames-1) {
-							this.page_faults += 1;
+							this.fifo_page_faults += 1;
 							// look for first-in page
 							for(k=0; k<this.frames; k++) {
 								if(frames[k][1]) {
@@ -177,9 +178,7 @@
 						}
 
 					}
-
 				}
-
 
 				/**
 				* Prepare table representation
@@ -230,6 +229,134 @@
 
 				return table;
 			}
+
+			this.lru = function() {
+				var pages = this.pages.split(';');
+				var frames = [];
+
+				// initialize matrix for page fault tracking
+				var matrix = [];
+				for(i=0; i<this.frames; i++) {
+					matrix[i] = [];
+					for(j=0; j<pages.length; j++) {
+						matrix[i][j] = [];
+						matrix[i][j][0] = null; 	// page
+						matrix[i][j][1] = false;	// page-fault flag						
+					}
+				}
+
+				// initialize frames to null
+				for(i=0; i<this.frames; i++) {
+					frames[i] = []
+					frames[i][0] = null;
+					frames[i][1] = 0;				// page length of stay not being used
+				}
+
+				// process pages 
+				loop_pages:
+				for(i=0; i<pages.length; i++) {
+					var page = pages[i];
+
+					loop_frames:
+					for(j=0; j<this.frames; j++) {
+						var frame = frames[j];						
+
+						matrix[j][i][0] = frames[j][0];
+
+						if(frame[0] == page) {
+
+							frame[1] = 0;	// reset page length of stay
+
+							for(k=j+1; k<this.frames; k++) {
+								frames[k][1] += 1;
+								matrix[k][i][0] = matrix[k][i-1][0];
+							}
+
+							continue loop_pages;
+						}
+
+						if(frame[0]==null) {					
+							frames[j][0] = matrix[j][i][0] = page;
+							frames[j][1] += 1;
+							matrix[j][i][1] = true;
+							this.lru_page_faults += 1; 
+							continue loop_pages;
+						}
+
+						frame[1] += 1;	// update page length of stay
+						
+						// page fault occur
+						if(j==this.frames-1) {
+							this.lru_page_faults += 1;
+							
+							// look for the highest page length of stay unused
+							var highest = null;
+							for(k=0; k<this.frames; k++) {
+								if(highest==null) {
+									highest = k;
+									continue;
+								}								
+								highest = (frames[highest][1]>frames[k][1]) ? highest : k;
+							}
+
+							frames[highest][0] = matrix[highest][i][0] = page;
+							frames[highest][1] = 0;
+							matrix[highest][i][1] = true;							
+						}
+
+					}
+				}
+
+				/**
+				* Prepare table representation
+				*/				
+				
+				var rows = this.frames;
+				var columns = pages.length;
+
+				var table = $('<table/>');
+
+				var thead = $('<thead/>');
+				var theadRow = $('<tr/>');
+				for(i=0; i<columns+1; i++) {
+					if(i==0) {
+						theadRow.append($('<th/>').html('&nbsp;'));
+						continue;
+					}
+					theadRow.append($('<th/>').text(pages[i-1]));
+				}
+				thead.append(theadRow);
+				table.append(thead);
+
+				var tbody = $('<tbody/>');
+				for(i=0; i<rows; i++) {
+					var row = $('<tr/>');
+					
+					for(j=0; j<columns+1; j++) {
+						
+						if(j==0) {
+							row.append($('<th/>').text(i+1));
+							continue;
+						}
+
+						var column = $('<td/>');
+						column.text(matrix[i][j-1][0]);
+
+						if(matrix[i][j-1][1]) {
+							column.addClass('page-fault');
+						}
+
+						row.append(column);
+					}
+
+					tbody.append(row);
+				}
+
+				table.append(tbody);
+
+				return table;
+			}
+
 		}
 	</script>
 
@@ -237,15 +364,15 @@
 		$(function() {
 
 			$('#runBtn').click(function() {
-				var fifo = new Container();
-				var lru = new Container();
-				var lfu = new Container();
+				var x = new Container();
+				x.pages = $('#pages').val();
+				x.frames = $('#frames').val();
 
-				fifo.pages = lru.pages = lfu.pages = $('#pages').val();
-				fifo.frames = lru.frames = lfu.frames = $('#frames').val();
+				$('#fifo').html(x.fifo());
+				$('#fifo').append('<p><strong>Page Faults: ' + x.fifo_page_faults + '</strong></p>');
 
-				$('#fifo').html(fifo.simulate());
-				$('#fifo').append('<p><strong>Page Faults: ' + fifo.page_faults + '</strong></p>');
+				$('#lru').html(x.lru());
+				$('#lru').append('<p><strong>Page Faults: ' + x.lru_page_faults + '</strong></p>');
 
 				$('table').addClass('table table-striped table-bordered');
 			});
