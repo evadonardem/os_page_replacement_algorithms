@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>OS - Page Replacement Algorithms</title>
+
+	<!-- jQuery -->
+	<script src="js/jquery-3.1.1.min.js" type="text/javascript"></script>
+
+	<!-- Bootstrap -->
+	<script src="plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+	<link rel="stylesheet" type="text/css" href="plugins/bootstrap/css/bootstrap.min.css">
+
+	<!-- Font-Awesome -->
+	<link rel="stylesheet" type="text/css" href="plugins/font-awesome/css/font-awesome.min.css">
+
+</head>
+<body>
+	<div class="container-fluid">
+		<h1>Operating System</h1>
+		<h4>Page Replacement Algorithms</h4>
+
+		<div class="row">
+			<div class="col-md-3">
+				<div class="panel panel-default">
+					<div class="panel-heading"><i class="fa fa-lg fa-cog"></i> Configuration</div>
+					<div class="panel-body">
+						<label>Enter pages:</label>
+						<input type="text" id="pages" class="form-control">
+						<p><i class="fa fa-info-circle"></i> Enter pages seperated by semicolon.</p>
+						<p>Example:</p>
+						<ul>
+							<li>3;2;6;1;3;4;1;3;6;5;2;5;4;2;4;3;2;4;1</li>
+							<li>7;0;1;2;0;3;0;4;2;3;0;3;2;1;2;0;1;7;0;1</li>
+							<li>D;A;V;E;M;E;D;R;A;N;O</li>
+						</ul>
+						<br>
+
+						<label>Select number of frames:</label>
+						<select id="frames" class="form-control">
+							<option>1</option>
+							<option>2</option>
+							<option>3</option>
+							<option>4</option>
+							<option>5</option>
+							<option>6</option>
+							<option>7</option>
+							<option>8</option>
+							<option>9</option>
+							<option>10</option>
+						</select>
+						<br>
+
+						<div class="row">
+							<div class="col-md-12">
+								<div class="btn-group pull-right">								
+									<button id="runBtn" class="btn btn-primary">Run</button>
+									<button id="clearBtn" class="btn btn-default">Clear</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+			</div>
+			<div class="col-md-9">
+				<div class="row">
+					<div class="col-md-12 col-sm-12">						
+						<div class="panel panel-primary">
+							<div class="panel-heading">
+								<strong>First-In First-Out (FIFO) Page Replacement Algorithm</strong>
+							</div>
+							<div class="panel-body">
+								<div id="fifo" class="run-result"></div>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-12 col-sm-12">
+						<div class="panel panel-primary">
+							<div class="panel-heading">
+								<strong>Least Recently Used (LRU) Page Replacement Algorithm</strong>
+							</div>
+							<div class="panel-body">
+								<div id="lru" class="run-result"></div>
+							</div>
+						</div>
+					</div>
+					<div class="col-md-12 col-sm-12">
+						<div class="panel panel-primary">
+							<div class="panel-heading">
+								<strong>Least Frequently Used (LFU) Page Replacement Algorithm</strong>
+							</div>
+							<div class="panel-body">
+								<div id="lfu" class="run-result"></div>
+							</div>
+						</div>						
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>	
+
+	<script type="text/javascript">
+		function Container() {
+			this.pages = null;
+			this.frames = null;
+			this.page_faults = 0;
+
+			this.simulate = function() {
+				var pages = this.pages.split(';');
+				var frames = [];
+
+				// initialize matrix for page fault tracking
+				var matrix = [];
+				for(i=0; i<this.frames; i++) {
+					matrix[i] = [];
+					for(j=0; j<pages.length; j++) {
+						matrix[i][j] = [];
+						matrix[i][j][0] = null; 	// page
+						matrix[i][j][1] = false;	// page-fault flag
+					}
+				}
+
+				// initialize frames to null
+				for(i=0; i<this.frames; i++) {
+					frames[i] = []
+					frames[i][0] = null;
+					frames[i][1] = (i==0) ? true : false;
+				}
+
+				// process pages 
+				loop_pages:
+				for(i=0; i<pages.length; i++) {
+					var page = pages[i];
+
+					loop_frames:
+					for(j=0; j<this.frames; j++) {
+						var frame = frames[j];
+						
+						matrix[j][i][0] = frames[j][0];
+
+						if(frame[0] == page) {
+							for(k=j+1; k<this.frames; k++) {
+								matrix[k][i][0] = matrix[k][i-1][0];
+							}
+							continue loop_pages;
+						}
+
+						if(frame[0]==null) {					
+							frames[j][0] = matrix[j][i][0] = page;
+							continue loop_pages;
+						}
+
+						
+
+						// page fault occur
+						if(j==this.frames-1) {
+							this.page_faults += 1;
+							// look for first-in page
+							for(k=0; k<this.frames; k++) {
+								if(frames[k][1]) {
+									frames[k][0] = matrix[k][i][0] = page;
+									frames[k][1] = false;
+
+									matrix[k][i][1] = true;
+
+									if(k+1<this.frames) {
+										frames[k+1][1] = true;
+									} else {
+										frames[0][1] = true;
+									}
+									break;
+								}
+							}
+						}
+
+					}
+
+				}
+
+
+				/**
+				* Prepare table representation
+				*/				
+				
+				var rows = this.frames;
+				var columns = pages.length;
+
+				var table = $('<table/>');
+
+				var thead = $('<thead/>');
+				var theadRow = $('<tr/>');
+				for(i=0; i<columns+1; i++) {
+					if(i==0) {
+						theadRow.append($('<th/>').html('&nbsp;'));
+						continue;
+					}
+					theadRow.append($('<th/>').text(pages[i-1]));
+				}
+				thead.append(theadRow);
+				table.append(thead);
+
+				var tbody = $('<tbody/>');
+				for(i=0; i<rows; i++) {
+					var row = $('<tr/>');
+					
+					for(j=0; j<columns+1; j++) {
+						
+						if(j==0) {
+							row.append($('<th/>').text(i+1));
+							continue;
+						}
+
+						var column = $('<td/>');
+						column.text(matrix[i][j-1][0]);
+
+						if(matrix[i][j-1][1]) {
+							column.addClass('page-fault');
+						}
+
+						row.append(column);
+					}
+
+					tbody.append(row);
+				}
+
+				table.append(tbody);
+
+				return table;
+			}
+		}
+	</script>
+
+	<script type="text/javascript">
+		$(function() {
+
+			$('#runBtn').click(function() {
+				var fifo = new Container();
+				var lru = new Container();
+				var lfu = new Container();
+
+				fifo.pages = lru.pages = lfu.pages = $('#pages').val();
+				fifo.frames = lru.frames = lfu.frames = $('#frames').val();
+
+				$('#fifo').html(fifo.simulate());
+				$('#fifo').append('<p><strong>Page Faults: ' + fifo.page_faults + '</strong></p>');
+
+				$('table').addClass('table table-striped table-bordered');
+			});
+
+			$('#clearBtn').click(function() {
+				$('#pages').val('');
+				$('#frames').val(1);
+				$('.run-result').html('');
+			});
+		});
+	</script>
+
+	<style type="text/css">
+		.page-fault {
+			background-color: red;
+		}
+	</style>
+
+</body>
+</html>
