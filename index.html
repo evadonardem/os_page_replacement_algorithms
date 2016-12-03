@@ -31,6 +31,7 @@
 						<ul>
 							<li>3;2;6;1;3;4;1;3;6;5;2;5;4;2;4;3;2;4;1</li>
 							<li>7;0;1;2;0;3;0;4;2;3;0;3;2;1;2;0;1;7;0;1</li>
+							<li>1;2;3;4;1;2;5;1;2;3;4;5</li>
 							<li>D;A;V;E;M;E;D;R;A;N;O</li>
 						</ul>
 						<br>
@@ -147,6 +148,8 @@
 
 						if(frame[0]==null) {					
 							frames[j][0] = matrix[j][i][0] = page;
+							matrix[j][i][1] = true;
+							this.page_faults += 1; 
 							continue loop_pages;
 						}
 
