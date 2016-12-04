@@ -106,6 +106,7 @@
 			this.frames = null;
 			this.fifo_page_faults = 0;
 			this.lru_page_faults = 0;
+			this.lfu_page_faults = 0;
 
 			this.fifo = function() {
 				var pages = this.pages.split(';');
@@ -357,6 +358,161 @@
 				return table;
 			}
 
+			this.lfu = function() {
+				var pages = this.pages.split(';');
+				var frames = [];
+				var frames_queue = [];
+
+				// initialize page counter
+				var counters = {};
+				var arr = [];
+
+				for(i in pages) {
+					if($.inArray(pages[i], arr)==-1) {
+						arr.push(pages[i]);
+						counters['page'+pages[i]] = 0;
+					}
+				}
+
+				// initialize matrix for page fault tracking
+				var matrix = [];
+				for(i=0; i<this.frames; i++) {
+					matrix[i] = [];
+					for(j=0; j<pages.length; j++) {
+						matrix[i][j] = [];
+						matrix[i][j][0] = null; 	// page
+						matrix[i][j][1] = false;	// page-fault flag	
+						matrix[i][j][2] = null;		// frequency
+					}
+				}
+
+				// initialize frames to null
+				for(i=0; i<this.frames; i++) {
+					frames[i] = []
+					frames[i][0] = null;					
+				}
+
+				// process pages 
+				loop_pages:
+				for(i=0; i<pages.length; i++) {
+					var page = pages[i];
+
+					for(j=0; j<this.frames; j++) {
+						var frame = frames[j];						
+
+						matrix[j][i][0] = frames[j][0];
+						matrix[j][i][2] = counters['page'+frames[j][0]];
+
+						if(frame[0] == page) {
+
+							counters['page'+page] += 1;
+							matrix[j][i][2] = counters['page'+page];
+
+							for(k=j+1; k<this.frames; k++) {								
+								matrix[k][i][0] = matrix[k][i-1][0];
+								matrix[k][i][2] = matrix[k][i-1][2];
+							}
+
+							continue loop_pages;
+						}
+
+						if(frame[0]==null) {					
+							frames[j][0] = matrix[j][i][0] = page;
+							counters['page'+page] += 1;				
+							matrix[j][i][1] = true;
+							matrix[j][i][2] = counters['page'+page];
+							this.lfu_page_faults += 1; 
+							frames_queue.push(page);
+							continue loop_pages;
+						}
+
+						// page fault occur
+						if(j==this.frames-1) {							
+							this.lfu_page_faults += 1;
+							
+							var lowest_page = null;		
+							for(x in frames_queue) {								
+								if(lowest_page==null) {
+									lowest_page = frames_queue[x];
+									continue;
+								}								
+								lowest_page = (counters['page'+lowest_page]<=counters['page'+frames_queue[x]]) ? lowest_page : frames_queue[x];
+							}							
+							
+							var index = frames_queue.indexOf(lowest_page);
+							if(index > -1) {
+								frames_queue.splice(index, 1);
+							}
+
+							var lowest = null;							
+							for(x in frames) {
+								if(frames[x][0]==lowest_page) {									
+									lowest = x;
+									break;
+								}
+							}							
+
+							frames[lowest][0] = matrix[lowest][i][0] = page;
+							counters['page'+frames[lowest][0]] = 0;
+							counters['page'+page] = 1;
+							matrix[lowest][i][1] = true;
+
+							frames_queue.push(page);
+						}
+
+					}
+				}
+
+				/**
+				* Prepare table representation
+				*/				
+				
+				var rows = this.frames;
+				var columns = pages.length;
+
+				var table = $('<table/>');
+
+				var thead = $('<thead/>');
+				var theadRow = $('<tr/>');
+				for(i=0; i<columns+1; i++) {
+					if(i==0) {
+						theadRow.append($('<th/>').html('&nbsp;'));
+						continue;
+					}
+					theadRow.append($('<th/>').text(pages[i-1]));
+				}
+				thead.append(theadRow);
+				table.append(thead);
+
+				var tbody = $('<tbody/>');
+				for(i=0; i<rows; i++) {
+					var row = $('<tr/>');
+					
+					for(j=0; j<columns+1; j++) {
+						
+						if(j==0) {
+							row.append($('<th/>').text(i+1));
+							continue;
+						}
+
+						var column = $('<td/>');
+						column.html((matrix[i][j-1][0]!==null ? matrix[i][j-1][0] : '') + (matrix[i][j-1][2]!==null ? '<sub><small><em>'+matrix[i][j-1][2]+'</em></small></sub>' : ''));
+
+						if(matrix[i][j-1][1]) {
+							column.addClass('page-fault');
+						}
+
+						row.append(column);
+					}
+
+					tbody.append(row);
+				}
+
+				table.append(tbody);
+
+				return table;
+			}
+
 		}
 	</script>
 
@@ -373,6 +529,9 @@
 
 				$('#lru').html(x.lru());
 				$('#lru').append('<p><strong>Page Faults: ' + x.lru_page_faults + '</strong></p>');
+
+				$('#lfu').html(x.lfu());
+				$('#lfu').append('<p><strong>Page Faults: ' + x.lfu_page_faults + '</strong></p>');
 
 				$('table').addClass('table table-striped table-bordered');
 			});
